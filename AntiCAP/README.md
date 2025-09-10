@@ -4,7 +4,7 @@
 
 # AntiCAP
 
-<strong>Version:3.1.9</strong>
+<strong>Version:3.2.0</strong>
 
 
 
@@ -17,7 +17,8 @@
 | `图标点选`     |✅| 侦测图标位置 或 按序返回坐标                            |
 | `文字点选`     |✅| 侦测文字位置 或 按序返回坐标                            |
 | `相似对比`     |✅| 图片中文字的相似度对比                                |
-| `双旋转验证码`   |✅| 返回角度                                       |
+| `双图旋转验证码`  |✅| 返回角度                                       |
+| `单图旋转验证码`  |✅| 返回角度                                       |
 | `WebApi服务` | ✅ | https://github.com/81NewArk/AntiCAP-WebApi |
 
 
@@ -45,6 +46,7 @@
   - [8. 阴影滑块类](#8-阴影滑块类)
   - [9. 相似度对比](#9-相似度对比)
   - [10. 双图旋转类验证码](#10-双图旋转类验证码)
+  - [11. 单图旋转类验证码](#11-单图旋转类验证码)
 - [🧬 自定义模型](#自定义模型)
 - [🐧 QQ交流群](#qq交流群)
 - [💪🏼 模型训练](#模型训练)
@@ -390,7 +392,7 @@ with open("image2.jpg", "rb") as f:
 
 Atc = AntiCAP.Handler(show_banner=True)
 
-result = Atc.compare_image_similarity(image1_base64=image1_base64, image2_base64=image2_base64)
+result = Atc.Compare_Image_Similarity(image1_base64=image1_base64, image2_base64=image2_base64)
 
 print("相似度结果:", result)
 
@@ -426,6 +428,38 @@ print(result)
 # {'similarity': 0.6651270985603333, 'inner_angle': 75.5, 'raw_angle': 151}
 
 ```
+
+
+###  11. 单图旋转类验证码
+
+#### 图片
+<img src="https://free.picui.cn/free/2025/09/10/68c1141e02a9f.jpg" width="200" height="200">
+
+```python
+# example.py
+
+import base64
+import AntiCAP
+
+with open("rotate_image.jpg", "rb") as f:
+    rotate_base64 = base64.b64encode(f.read()).decode('utf-8')
+
+
+
+
+Atc = AntiCAP.Handler(show_banner=True)
+
+result= Atc.Single_Rotate(image_base64=rotate_base64)
+
+print(result)
+
+# 229  返回旋转角度
+
+```
+
+
+
+
 
 <h2 id="自定义模型" align="center">🧬 自定义模型</h2>
 
@@ -472,10 +506,15 @@ result = Atc.ClickIcon_Order(order_img_base64="",
                              sim_onnx_model_path=r"C:\AntiCAP\model\your_sim_onnx_model.onnx") 
 
 
-result = Atc.compare_image_similarity(image1_base64="",
+result = Atc.Compare_Image_Similarity(image1_base64="",
                                       image2_base64="",
                                       # sim_onnx_model_path为 .onnx格式的孪生神经网络模型
                                       sim_onnx_model_path=r"C:\AntiCAP\model\your_sim_onnx_model.onnx")
+
+
+result = Atc.Single_Rotate(image_base64="",
+                            # rotate_onnx_modex_path为 .onnx格式的旋转模型
+                            rotate_onnx_modex_path=r"C:\AntiCAP\model\your_rotate_onnx_model.onnx")
 
 ```
 

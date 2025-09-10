@@ -33,6 +33,7 @@ def Download_Models_if_needed():
         "[OCR]Ddddocr.onnx",
         "[Text]Detection_model.pt",
         "[Text]Siamese_model.onnx",
+        "[Rotate]Rotate_model.onnx",
         "charset.txt"
     ]
 
@@ -513,7 +514,7 @@ class Handler(object):
         }
 
     # 图像相似度比较 对比图片的中的文字
-    def compare_image_similarity(self, image1_base64: str = None, image2_base64: str = None,sim_onnx_model_path: str = '', use_gpu: bool = False):
+    def Compare_Image_Similarity(self, image1_base64: str = None, image2_base64: str = None,sim_onnx_model_path: str = '', use_gpu: bool = False):
 
         sim_onnx_model_path = sim_onnx_model_path or os.path.join(os.path.dirname(__file__), 'Models','[Text]Siamese_model.onnx')
 
@@ -550,8 +551,62 @@ class Handler(object):
 
         return similarity
 
+    # 单图旋转角度
+    def Single_Rotate(self, img_base64: str, rotate_onnx_modex_path: str = '',use_gpu: bool = False):
 
-    # 双旋转
+        rotate_onnx_modex_path = rotate_onnx_modex_path or os.path.join(os.path.dirname(__file__), 'Models', '[Rotate]Rotate_model.onnx')
+
+        providers = ['CUDAExecutionProvider'] if use_gpu and onnxruntime.get_device().upper() == 'GPU' else ['CPUExecutionProvider']
+        session = onnxruntime.InferenceSession(rotate_onnx_modex_path, providers=providers)
+
+
+        img_bytes = base64.b64decode(img_base64)
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+
+
+        DEFAULT_TARGET_SIZE = 224
+        SQRT2 = math.sqrt(2.0)
+
+        # PIL -> numpy, CHW
+        img_np = np.array(img, dtype=np.uint8)
+        img_np = np.transpose(img_np, (2, 0, 1))
+
+
+        _, h, w = img_np.shape
+        assert h == w, "Image must be square"
+        new_size = int(h / SQRT2)
+        top = (h - new_size) // 2
+        left = (w - new_size) // 2
+        img_np = img_np[:, top:top + new_size, left:left + new_size]
+
+
+        img_np = img_np.astype(np.float32) / 255.0
+
+
+        img_tmp = np.transpose(img_np, (1, 2, 0))  # CHW -> HWC
+        img_tmp = Image.fromarray((img_tmp * 255).astype(np.uint8))
+        img_tmp = img_tmp.resize((DEFAULT_TARGET_SIZE, DEFAULT_TARGET_SIZE), Image.Resampling.BILINEAR)
+        img_np = np.array(img_tmp, dtype=np.float32) / 255.0
+        img_np = np.transpose(img_np, (2, 0, 1))  # HWC -> CHW
+
+        # 归一化 (ImageNet mean/std)
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
+        img_np = (img_np - mean) / std
+
+
+        img_np = np.expand_dims(img_np, axis=0)
+
+
+        ort_inputs = {session.get_inputs()[0].name: img_np}
+        predict = session.run(None, ort_inputs)[0]
+
+        degree = int(np.argmax(predict, axis=1).item())
+        return degree
+
+
+
+    # 双图旋转
     def Double_Rotate(self,inside_base64: str, outside_base64: str, check_pixel: int = 10, speed_ratio: float = 1,grayscale: bool = False, anticlockwise: bool = False, cut_pixel_value: int = 0, ):
         image_array_inner = np.asarray(bytearray(base64.b64decode(inside_base64)), dtype="uint8")
         inner_image = cv2.imdecode(image_array_inner, 1)
