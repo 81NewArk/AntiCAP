@@ -153,43 +153,58 @@ class Handler(object):
             return result
 
     # 算术识别
-    def Math(self, img_base64: str, math_model_path: str = '', use_gpu: bool = False):
+    def Math(img_base64: str, math_model_path: str = '', use_gpu: bool = False):
 
-        math_model_path = math_model_path or os.path.join(os.path.dirname(__file__), 'Models','[Math]Detection_model.pt')
+        math_model_path = math_model_path or os.path.join(os.path.dirname(__file__), 'Models', '[Math]Detection_model.pt')
 
-        device = torch.device('cuda' if use_gpu else 'cpu')
+        device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
         model = YOLO(math_model_path, verbose=False)
         model.to(device)
 
+
         image_bytes = base64.b64decode(img_base64)
         image = Image.open(io.BytesIO(image_bytes))
+
+
         results = model(image)
 
+        # 解析检测结果（按 x 坐标排序）
         sorted_elements = []
         for box in results[0].boxes:
             cls_id = int(box.cls[0])
-            label = results[0].names[cls_id]
+            label = results[0].names[cls_id].strip()
             x1 = float(box.xyxy[0][0])
             sorted_elements.append((x1, label))
 
         sorted_elements.sort(key=lambda x: x[0])
         sorted_labels = [label for _, label in sorted_elements]
 
+
         captcha_text = ''.join(sorted_labels)
-        result = None
 
-        if captcha_text:
-            expr = captcha_text.split('=')[0] if '=' in captcha_text else captcha_text
-            expr = expr.replace('×', '*').replace('÷', '/')
-            expr = re.sub(r'[^\d\+\-\*/]', '', expr)
-            try:
-                result = eval(expr)
-            except Exception as e:
-                print(f"[Anti-CAP] 表达式解析出错: {e}")
-        else:
-            print("[Anti-CAP] 识别失败，未获取到表达式")
+        if not captcha_text:
+            return None
 
-        return result
+        # 标准化符号
+        expr = captcha_text
+        expr = expr.replace('×', '*').replace('÷', '/')
+        expr = expr.replace('？', '?')  # 容错中文问号
+        expr = expr.replace('=', '')  # 去掉等号
+
+
+        expr = re.sub(r'[^0-9\+\-\*/]', '', expr)
+
+        if not expr or '?' in captcha_text:  # 如果有问号，直接不给结果
+            return None
+
+        # 安全计算表达式
+        try:
+            result = eval(expr)
+            return result
+        except Exception as e:
+            print(f"[Anti-CAP] 表达式解析出错: {expr}, 错误: {e}")
+            return None
+
 
     # 图标侦测
     def Detection_Icon(self, img_base64: str = None, detectionIcon_model_path: str = '', use_gpu: bool = False):
