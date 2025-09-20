@@ -604,8 +604,6 @@ class Handler(object):
         degree = int(np.argmax(predict, axis=1).item())
         return degree
 
-
-
     # 双图旋转
     def Double_Rotate(self,inside_base64: str, outside_base64: str, check_pixel: int = 10, speed_ratio: float = 1,grayscale: bool = False, anticlockwise: bool = False, cut_pixel_value: int = 0, ):
         image_array_inner = np.asarray(bytearray(base64.b64decode(inside_base64)), dtype="uint8")
