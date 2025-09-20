@@ -39,10 +39,11 @@ def Download_Models_if_needed():
 
     os.makedirs(output_dir, exist_ok=True)
 
+    print(f"[Anti-CAP] 首次使用，正在检查模型文件...")
     for fname in filenames:
         filepath = os.path.join(output_dir, fname)
         if not os.path.exists(filepath):
-            print(f"[Anti-CAP] Model file {fname} not found. Downloading...")
+            print(f"[Anti-CAP] ⚠️ 模型文件 '{fname}' 不存在，正在下载...")
             encoded_name = urllib.parse.quote(fname)
             full_url = base_url + encoded_name
             try:
@@ -51,12 +52,12 @@ def Download_Models_if_needed():
                     with open(filepath, "wb") as f:
                         for chunk in r.iter_content(chunk_size=8192):
                             f.write(chunk)
-                print(f"[Anti-CAP] ✅ Downloaded: {fname}")
+                print(f"[Anti-CAP] ✅ 模型文件 '{fname}' 下载完成。")
             except Exception as e:
-                print(f"[Anti-CAP] ❌ Failed to download {fname}: {e}")
+                print(f"[Anti-CAP] ❌ 模型文件 '{fname}' 下载失败: {e}")
                 if os.path.exists(filepath):
                     os.remove(filepath)
-                raise IOError(f"Failed to download required model '{fname}'.") from e
+                raise IOError(f"无法下载模型文件 '{fname}'，请检查网络连接或稍后重试。")
 
 
 class TypeError(Exception):
@@ -260,7 +261,6 @@ class Handler(object):
                     best_score = similarity_score
                     best_target_box = target_box
 
-            # 不再判断 >= similarity_threshold，直接取最高分
             if best_target_box:
                 best_matching_boxes.append([int(coord) for coord in best_target_box])
                 available_target_boxes.remove(best_target_box)
@@ -640,7 +640,7 @@ class Handler(object):
 
         cut_array_inner = inner_image[up_inner:down_inner, left_inner:right_inner]
         if cut_array_inner.size == 0:
-            raise ValueError("cut_array_inner is empty, check input image or cut logic.")
+            raise ValueError("[Anti-CAP] cut_array_inner 是空的，请检查输入图片或裁剪逻辑。")
 
         diameter_inner = (min(cut_array_inner.shape[:2]) // 2) * 2
         cut_inner_image = cv2.resize(cut_array_inner, dsize=(diameter_inner, diameter_inner))
@@ -682,7 +682,7 @@ class Handler(object):
 
         cut_array_outer = outer_image[up_outer:down_outer, left_outer:right_outer]
         if cut_array_outer.size == 0:
-            raise ValueError("cut_array_outer is empty, check input image or cut logic.")
+            raise ValueError("[Anti-CAP] cut_array_outer 是空的，请检查输入图片或裁剪逻辑。")
 
         diameter_outer = (min(cut_array_outer.shape[:2]) // 2) * 2
         cut_outer_image = cv2.resize(cut_array_outer, dsize=(diameter_outer, diameter_outer))
