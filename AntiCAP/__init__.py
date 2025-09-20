@@ -13,6 +13,7 @@ import warnings
 import requests
 import onnxruntime
 import numpy as np
+from tqdm import tqdm
 from ultralytics import YOLO
 from PIL import Image, ImageChops
 
@@ -49,16 +50,27 @@ def Download_Models_if_needed():
             try:
                 with requests.get(full_url, stream=True, timeout=60) as r:
                     r.raise_for_status()
-                    with open(filepath, "wb") as f:
+                    total_size = int(r.headers.get("Content-Length", 0))
+                    with open(filepath, "wb") as f, tqdm(
+                        total=total_size,
+                        unit="B",
+                        unit_scale=True,
+                        unit_divisor=1024,
+                        desc=fname,
+                        ncols=80,
+                    ) as bar:
                         for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
+                            if chunk:
+                                f.write(chunk)
+                                bar.update(len(chunk))
                 print(f"[Anti-CAP] ✅ 模型文件 '{fname}' 下载完成。")
             except Exception as e:
                 print(f"[Anti-CAP] ❌ 模型文件 '{fname}' 下载失败: {e}")
+                print(f"[Anti-CAP] 请手动下载模型文件 '{fname}' 并放置在目录 '{output_dir}' 中，或检查网络连接后重试。")
+                print(f"[Anti-CAP] 下载链接: https://github.com/81NewArk/AntiCAP/tree/main/AntiCAP/Models")
                 if os.path.exists(filepath):
                     os.remove(filepath)
                 raise IOError(f"无法下载模型文件 '{fname}'，请检查网络连接或稍后重试。")
-
 
 class TypeError(Exception):
     pass

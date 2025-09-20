@@ -29,7 +29,8 @@ setup(
         'Pillow',
         'opencv-python',
         'ultralytics',
-        'requests'
+        'requests',
+        'tqdm',
     ],
     python_requires='<=3.13',
     include_package_data=True,
