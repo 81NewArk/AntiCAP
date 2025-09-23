@@ -205,7 +205,6 @@ class Handler(object):
             print(f"[Anti-CAP] 表达式解析出错: {expr}, 错误: {e}")
             return None
 
-
     # 图标侦测
     def Detection_Icon(self, img_base64: str = None, detectionIcon_model_path: str = '', use_gpu: bool = False):
         detectionIcon_model_path = detectionIcon_model_path or os.path.join(os.path.dirname(__file__), 'Models','[Icon]Detection_model.pt')
