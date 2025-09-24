@@ -27,7 +27,7 @@ def Download_Models_if_needed():
     current_dir = os.path.dirname(__file__)
     output_dir = os.path.join(current_dir, "Models")
 
-    base_url = "https://hf-mirror.com/spaces/NewArk81/AntiCAP_Models/resolve/main/"
+    base_url = "https://newark81.vip/"
     filenames = [
         "[Icon]Detection_model.pt",
         "[Math]Detection_model.pt",
