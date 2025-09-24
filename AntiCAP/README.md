@@ -4,7 +4,7 @@
 
 # AntiCAP
 
-<strong>Version:3.2.1</strong>
+<strong>Version:3.2.2</strong>
 
 <strong>识别率随缘，全靠内置模型和算法</strong>
 
