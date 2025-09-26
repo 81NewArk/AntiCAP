@@ -4,7 +4,7 @@
 
 # AntiCAP
 
-<strong>Version:3.2.2</strong>
+<strong>Version:3.2.3</strong>
 
 <strong>识别率随缘，全靠内置模型和算法</strong>
 
@@ -135,7 +135,7 @@ print(result) # 返回字符串 jepy
 
 
 ###  2. 算术验证码识别
-#### 参考例图 (加减乘除类) 目前模型泛化能力较弱 等待更新
+#### 参考例图 (加减乘除) 
 <img src="https://free.picui.cn/free/2025/07/30/6889718adee8f.jpg">
 
 
@@ -281,7 +281,7 @@ with open("target_image.jpg", "rb") as f:
     target_img_base64 = base64.b64encode(f.read()).decode('utf-8')
 
 Atc = AntiCAP.Handler(show_banner=True)
-result = Atc.ClickIcon_Order(
+result = Atc.ClickText_Order(
     order_img_base64=order_img_base64,
     target_img_base64=target_img_base64
 )

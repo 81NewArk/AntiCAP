@@ -6,6 +6,7 @@ import re
 import cv2
 import ast
 import math
+import json
 import torch
 import base64
 import logging
@@ -23,28 +24,30 @@ warnings.filterwarnings('ignore')
 onnxruntime.set_default_logger_severity(3)
 
 
-def Download_Models_if_needed():
+def _download_models_if_needed():
     current_dir = os.path.dirname(__file__)
-    output_dir = os.path.join(current_dir, "Models")
+    output_dir = os.path.join(current_dir, "AntiCAP-Models")
 
-    base_url = "https://newark81.vip/"
+    base_url = "https://newark81.vip/AntiCAP-Models/"
     filenames = [
-        "[Icon]Detection_model.pt",
-        "[Math]Detection_model.pt",
-        "[OCR]Ddddocr.onnx",
-        "[Text]Detection_model.pt",
-        "[Text]Siamese_model.onnx",
-        "[Rotate]Rotate_model.onnx",
-        "charset.txt"
+        "[AntiCAP]-Detection_Icon-YOLO.pt",
+        "[AntiCAP]-Detection_Math-YOLO.pt",
+        "[AntiCAP]-Detection_Text-YOLO.pt",
+        "[AntiCAP]-Rotation-RotNetR.onnx",
+        "[AntiCAP]-Siamese_RestNet18.onnx",
+        "[AntiCAP]-Siamese_VggNet16.onnx",
+        "[AntiCAP]-Siamese_EfficientNetB0.onnx",
+        "[Dddd]-OCR.onnx",
+        "[Dddd]-CharSets.txt",
     ]
 
     os.makedirs(output_dir, exist_ok=True)
 
-    print(f"[Anti-CAP] 首次使用，正在检查模型文件...")
+    print(f"[AntiCAP] 首次使用，正在检查模型文件...")
     for fname in filenames:
         filepath = os.path.join(output_dir, fname)
         if not os.path.exists(filepath):
-            print(f"[Anti-CAP] ⚠️ 模型文件 '{fname}' 不存在，正在下载...")
+            print(f"[AntiCAP] ⚠️ 模型文件 '{fname}' 不存在，正在下载...")
             encoded_name = urllib.parse.quote(fname)
             full_url = base_url + encoded_name
             try:
@@ -63,16 +66,23 @@ def Download_Models_if_needed():
                             if chunk:
                                 f.write(chunk)
                                 bar.update(len(chunk))
-                print(f"[Anti-CAP] ✅ 模型文件 '{fname}' 下载完成。")
+                print(f"[AntiCAP] ✅ 模型文件 '{fname}' 下载完成。")
             except Exception as e:
-                print(f"[Anti-CAP] ❌ 模型文件 '{fname}' 下载失败: {e}")
-                print(f"[Anti-CAP] 请手动下载模型文件 '{fname}' 并放置在目录 '{output_dir}' 中，或检查网络连接后重试。")
-                print(f"[Anti-CAP] 下载链接: https://github.com/81NewArk/AntiCAP/tree/main/AntiCAP/Models")
+                print(f"[AntiCAP] ❌ 模型文件 '{fname}' 下载失败: {e}")
+                print(f"[AntiCAP] 请手动下载模型文件 '{fname}' 并放置在目录 '{output_dir}' 中，或检查网络连接后重试。")
+                print(f"[AntiCAP] 下载链接: https://github.com/81NewArk/AntiCAP/tree/main/AntiCAP/AntiCAP-Models")
                 if os.path.exists(filepath):
                     os.remove(filepath)
                 raise IOError(f"无法下载模型文件 '{fname}'，请检查网络连接或稍后重试。")
 
-class TypeError(Exception):
+SIAMESE_MODEL_MAPPINGS = {
+    'VGG16': '[AntiCAP]-Siamese_VggNet16.onnx',
+    'EfficientNetB0': '[AntiCAP]-Siamese_EfficientNetB0.onnx',
+    'RestNet18': '[AntiCAP]-Siamese_RestNet18.onnx',
+}
+
+
+class AntiCAPException(Exception):
     pass
 
 
@@ -80,7 +90,8 @@ class Handler(object):
     logging.getLogger('ultralytics').setLevel(logging.WARNING)
 
     def __init__(self, show_banner=True):
-        Download_Models_if_needed()
+        _download_models_if_needed()
+        self.siamese_models = {}  # 初始化孪生网络模型缓存
 
         if show_banner:
             print('''
@@ -96,11 +107,15 @@ class Handler(object):
             -----------------------------------------------------------''')
 
     # 文字识别
-    def OCR(self, img_base64: str = None, use_gpu: bool = False, png_fix: bool = False, probability=False):
+    def OCR(self,
+            img_base64: str = None,
+            use_gpu: bool = False,
+            png_fix: bool = False,
+            probability=False):
 
         current_dir = os.path.dirname(__file__)
-        model_path = os.path.join(current_dir, 'Models', '[OCR]Ddddocr.onnx')
-        charset_path = os.path.join(current_dir, 'Models', 'charset.txt')
+        model_path = os.path.join(current_dir, 'AntiCAP-Models', '[Dddd]-OCR.onnx')
+        charset_path = os.path.join(current_dir, 'AntiCAP-Models', '[Dddd]-CharSets.txt')
 
         try:
             with open(charset_path, 'r', encoding='utf-8') as f:
@@ -152,10 +167,15 @@ class Handler(object):
             }
             return result
 
-    # 算术识别
-    def Math(img_base64: str, math_model_path: str = '', use_gpu: bool = False):
 
-        math_model_path = math_model_path or os.path.join(os.path.dirname(__file__), 'Models', '[Math]Detection_model.pt')
+
+    # 算术识别
+    def Math(self,
+             img_base64: str,
+             math_model_path: str = '',
+             use_gpu: bool = False):
+
+        math_model_path = math_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Detection_Math-YOLO.pt')
 
         device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
         model = YOLO(math_model_path, verbose=False)
@@ -202,12 +222,18 @@ class Handler(object):
             result = eval(expr)
             return result
         except Exception as e:
-            print(f"[Anti-CAP] 表达式解析出错: {expr}, 错误: {e}")
+            print(f"[AntiCAP] 表达式解析出错: {expr}, 错误: {e}")
             return None
 
+
+
     # 图标侦测
-    def Detection_Icon(self, img_base64: str = None, detectionIcon_model_path: str = '', use_gpu: bool = False):
-        detectionIcon_model_path = detectionIcon_model_path or os.path.join(os.path.dirname(__file__), 'Models','[Icon]Detection_model.pt')
+    def Detection_Icon(self,
+                       img_base64: str = None,
+                       detectionIcon_model_path: str = '',
+                       use_gpu: bool = False):
+
+        detectionIcon_model_path = detectionIcon_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models','[AntiCAP]-Detection_Icon-YOLO.pt')
         device = torch.device('cuda' if use_gpu else 'cpu')
         model = YOLO(detectionIcon_model_path, verbose=False)
         model.to(device)
@@ -229,25 +255,29 @@ class Handler(object):
 
         return detections
 
+
+
     # 按序侦测图标
-    def ClickIcon_Order(self, order_img_base64: str, target_img_base64: str, detectionIcon_model_path: str = '',sim_onnx_model_path: str = '', use_gpu: bool = False):
-        detectionIcon_model_path = detectionIcon_model_path or os.path.join(os.path.dirname(__file__), 'Models','[Icon]Detection_model.pt')
-        sim_onnx_model_path = sim_onnx_model_path or os.path.join(os.path.dirname(__file__), 'Models','[Text]Siamese_model.onnx')
+    def ClickIcon_Order(self,
+                        order_img_base64: str,
+                        target_img_base64: str,
+                        detectionIcon_model_path: str = '',
+                        sim_onnx_model_path: str = '',
+                        use_gpu: bool = False,
+                        model_type: str = 'EfficientNetB0'):
+
+        detectionIcon_model_path = detectionIcon_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Detection_Icon-YOLO.pt')
+        
+        if sim_onnx_model_path:
+            model_path = sim_onnx_model_path
+            effective_model_type = next((k for k in SIAMESE_MODEL_MAPPINGS if k.lower() in os.path.basename(model_path).lower()), model_type)
+        else:
+            model_path = os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', SIAMESE_MODEL_MAPPINGS.get(model_type, SIAMESE_MODEL_MAPPINGS['EfficientNetB0']))
+            effective_model_type = model_type
 
         device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
         model = YOLO(detectionIcon_model_path)
         model.to(device)
-
-        providers = ['CUDAExecutionProvider'] if use_gpu and onnxruntime.get_device().upper() == 'GPU' else [
-            'CPUExecutionProvider']
-        sim_session = onnxruntime.InferenceSession(sim_onnx_model_path, providers=providers)
-        input_names = [inp.name for inp in sim_session.get_inputs()]
-
-        def pil_to_tensor(img, size=(105, 105)):
-            img = img.convert("RGB").resize(size)
-            img_np = np.asarray(img).astype(np.float32) / 255.0
-            img_np = np.transpose(img_np, (2, 0, 1))  # HWC -> CHW
-            return np.expand_dims(img_np, axis=0)
 
         order_image = Image.open(io.BytesIO(base64.b64decode(order_img_base64))).convert("RGB")
         target_image = Image.open(io.BytesIO(base64.b64decode(target_img_base64))).convert("RGB")
@@ -258,7 +288,7 @@ class Handler(object):
         order_boxes_list = []
         if order_results and order_results[0].boxes:
             order_boxes = order_results[0].boxes.xyxy.cpu().numpy().tolist()
-            order_boxes.sort(key=lambda x: x[0])  # 按X坐标从左到右
+            order_boxes.sort(key=lambda x: x[0])
             order_boxes_list = order_boxes
 
         target_boxes_list = []
@@ -270,18 +300,19 @@ class Handler(object):
 
         for order_box in order_boxes_list:
             order_crop = order_image.crop(order_box)
-            order_tensor = pil_to_tensor(order_crop)
+            if order_crop.width == 0 or order_crop.height == 0:
+                best_matching_boxes.append([0, 0, 0, 0])
+                continue
 
             best_score = -1
             best_target_box = None
 
             for target_box in available_target_boxes:
                 target_crop = target_image.crop(target_box)
-                target_tensor = pil_to_tensor(target_crop)
+                if target_crop.width == 0 or target_crop.height == 0:
+                    continue
 
-                inputs = {input_names[0]: order_tensor, input_names[1]: target_tensor}
-                output = sim_session.run(None, inputs)
-                similarity_score = output[0][0][0]
+                similarity_score = self.get_siamese_similarity(order_crop, target_crop, model_path, use_gpu, effective_model_type, sim_onnx_model_path=sim_onnx_model_path)
 
                 if similarity_score > best_score:
                     best_score = similarity_score
@@ -295,10 +326,15 @@ class Handler(object):
 
         return best_matching_boxes
 
-    # 文字侦测
-    def Detection_Text(self, img_base64: str = None, detectionText_model_path: str = '', use_gpu: bool = False):
 
-        detectionText_model_path = detectionText_model_path or os.path.join(os.path.dirname(__file__), 'Models','[Text]Detection_model.pt')
+
+    # 文字侦测
+    def Detection_Text(self,
+                       img_base64: str = None,
+                       detectionText_model_path: str = '',
+                       use_gpu: bool = False):
+
+        detectionText_model_path = detectionText_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models','[AntiCAP]-Detection_Text-YOLO.pt')
         device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
         model = YOLO(detectionText_model_path, verbose=False)
         model.to(device)
@@ -320,27 +356,29 @@ class Handler(object):
 
         return detections
 
+
+
     # 按序侦测文字
-    def ClickText_Order(self, order_img_base64: str, target_img_base64: str, detectionText_model_path: str = '',sim_onnx_model_path: str = '', use_gpu: bool = False):
+    def ClickText_Order(self,
+                        order_img_base64: str,
+                        target_img_base64: str,
+                        detectionText_model_path: str = '',
+                        sim_onnx_model_path: str = '',
+                        use_gpu: bool = False,
+                        model_type: str = 'EfficientNetB0'):
 
-        detectionText_model_path = detectionText_model_path or os.path.join(os.path.dirname(__file__), 'Models','[Text]Detection_model.pt')
+        detectionText_model_path = detectionText_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Detection_Text-YOLO.pt')
 
-        sim_onnx_model_path = sim_onnx_model_path or os.path.join(os.path.dirname(__file__), 'Models','[Text]Siamese_model.onnx')
+        if sim_onnx_model_path:
+            model_path = sim_onnx_model_path
+            effective_model_type = next((k for k in SIAMESE_MODEL_MAPPINGS if k.lower() in os.path.basename(model_path).lower()), model_type)
+        else:
+            model_path = os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', SIAMESE_MODEL_MAPPINGS.get(model_type, SIAMESE_MODEL_MAPPINGS['EfficientNetB0']))
+            effective_model_type = model_type
 
         device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
         model = YOLO(detectionText_model_path)
         model.to(device)
-
-        providers = ['CUDAExecutionProvider'] if use_gpu and onnxruntime.get_device().upper() == 'GPU' else [
-            'CPUExecutionProvider']
-        sim_session = onnxruntime.InferenceSession(sim_onnx_model_path, providers=providers)
-        input_names = [inp.name for inp in sim_session.get_inputs()]
-
-        def pil_to_tensor(img, size=(105, 105)):
-            img = img.convert("RGB").resize(size)
-            img_np = np.asarray(img).astype(np.float32) / 255.0
-            img_np = np.transpose(img_np, (2, 0, 1))  # HWC -> CHW
-            return np.expand_dims(img_np, axis=0)
 
         order_image = Image.open(io.BytesIO(base64.b64decode(order_img_base64))).convert("RGB")
         target_image = Image.open(io.BytesIO(base64.b64decode(target_img_base64))).convert("RGB")
@@ -351,7 +389,7 @@ class Handler(object):
         order_boxes_list = []
         if order_results and order_results[0].boxes:
             order_boxes = order_results[0].boxes.xyxy.cpu().numpy().tolist()
-            order_boxes.sort(key=lambda x: x[0])  # 左到右排序
+            order_boxes.sort(key=lambda x: x[0])
             order_boxes_list = order_boxes
 
         target_boxes_list = []
@@ -363,18 +401,19 @@ class Handler(object):
 
         for order_box in order_boxes_list:
             order_crop = order_image.crop(order_box)
-            order_tensor = pil_to_tensor(order_crop)
+            if order_crop.width == 0 or order_crop.height == 0:
+                best_matching_boxes.append([0, 0, 0, 0])
+                continue
 
             best_score = -1
             best_target_box = None
 
             for target_box in available_target_boxes:
                 target_crop = target_image.crop(target_box)
-                target_tensor = pil_to_tensor(target_crop)
+                if target_crop.width == 0 or target_crop.height == 0:
+                    continue
 
-                inputs = {input_names[0]: order_tensor, input_names[1]: target_tensor}
-                output = sim_session.run(None, inputs)
-                similarity_score = output[0][0][0]
+                similarity_score = self.get_siamese_similarity(order_crop, target_crop, model_path, use_gpu, effective_model_type, sim_onnx_model_path=sim_onnx_model_path)
 
                 if similarity_score > best_score:
                     best_score = similarity_score
@@ -388,8 +427,14 @@ class Handler(object):
 
         return best_matching_boxes
 
+
+
     # 缺口滑块
-    def Slider_Match(self, target_base64: str = None, background_base64: str = None, simple_target: bool = False,flag: bool = False):
+    def Slider_Match(self,
+                     target_base64: str = None,
+                     background_base64: str = None,
+                     simple_target: bool = False,
+                     flag: bool = False):
 
         def get_target(img_bytes: bytes = None):
             try:
@@ -506,8 +551,12 @@ class Handler(object):
                 "target_y": target_y,
                 "target": [int(max_loc[0]), int(max_loc[1]), int(bottom_right[0]), int(bottom_right[1])]}
 
+
+
     # 阴影滑块
-    def Slider_Comparison(self, target_base64: str = None, background_base64: str = None):
+    def Slider_Comparison(self,
+                          target_base64: str = None,
+                          background_base64: str = None):
         def decode_base64_to_image(base64_string):
             image_data = base64.b64decode(base64_string)
             return Image.open(io.BytesIO(image_data)).convert("RGB")
@@ -539,48 +588,98 @@ class Handler(object):
             "target": [start_x, start_y]
         }
 
-    # 图像相似度比较 对比图片的中的文字
-    def Compare_Image_Similarity(self, image1_base64: str = None, image2_base64: str = None,sim_onnx_model_path: str = '', use_gpu: bool = False):
 
-        sim_onnx_model_path = sim_onnx_model_path or os.path.join(os.path.dirname(__file__), 'Models','[Text]Siamese_model.onnx')
 
-        def decode_base64_to_pil(b64str):
-            img_bytes = base64.b64decode(b64str)
-            return Image.open(io.BytesIO(img_bytes)).convert('RGB')
+    def get_siamese_similarity(self,
+                               image1: Image.Image,
+                               image2: Image.Image,
+                               model_path: str,
+                               use_gpu: bool,
+                               model_type: str,
+                               sim_onnx_model_path:
+                               str = None):
 
-        def pil_to_numpy(img, size=(105, 105)):
-            img = img.resize(size)
-            img_np = np.asarray(img).astype(np.float32) / 255.0
-            img_np = np.transpose(img_np, (2, 0, 1))
-            img_np = np.expand_dims(img_np, axis=0)
-            return img_np
+        if model_path in self.siamese_models:
+            session, meta = self.siamese_models[model_path]
+        else:
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"模型文件不存在: {model_path}")
+            providers = ['CUDAExecutionProvider'] if use_gpu and onnxruntime.get_device().upper() == 'GPU' else ['CPUExecutionProvider']
+            session = onnxruntime.InferenceSession(model_path, providers=providers)
+            
+            model_meta = session.get_modelmeta()
+            mean = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
+            std = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
 
-        img1 = decode_base64_to_pil(image1_base64)
-        img2 = decode_base64_to_pil(image2_base64)
+            if 'mean' in model_meta.custom_metadata_map and 'std' in model_meta.custom_metadata_map:
+                try:
+                    mean = np.array(json.loads(model_meta.custom_metadata_map['mean']), dtype=np.float32).reshape(3, 1, 1)
+                    std = np.array(json.loads(model_meta.custom_metadata_map['std']), dtype=np.float32).reshape(3, 1, 1)
+                except Exception:
+                    print("[AntiCAP] 提示：解析自定义模型的 mean/std 失败，使用默认值。")
+            elif sim_onnx_model_path:
+                print('''[AntiCAP] 提示：为了兼容本项目，您的自定义 ONNX 模型必须包含 `mean` 和 `std` 元数据。
+                
+                ⚠️ 如果您的训练归一化参数与默认值不同，请务必在导出 ONNX 时添加正确的 `mean` 和 `std`，否则图像相似度计算可能不准确。
+                1. 在 ONNX 模型中添加自定义元数据 `mean` 和 `std`，值为列表形式，例如 [0.485,0.456,0.406] 和 [0.229,0.224,0.225]。
+                2. 保存模型后，项目会自动读取这些元数据进行归一化处理，从而保证相似度计算精度与兼容性。''')
 
-        tensor1 = pil_to_numpy(img1)
-        tensor2 = pil_to_numpy(img2)
+            default_sizes = {'RestNet18': (105, 105), 'VGG16': (224, 224), 'EfficientNetB0': (224, 224)}
+            input_meta = session.get_inputs()[0]
+            input_size = (input_meta.shape[3], input_meta.shape[2]) if len(input_meta.shape) == 4 else default_sizes.get(model_type, (224, 224))
 
-        # 设置推理设备
-        providers = ['CUDAExecutionProvider'] if use_gpu else ['CPUExecutionProvider']
+            meta = {'mean': mean, 'std': std, 'input_size': input_size}
+            self.siamese_models[model_path] = (session, meta)
 
-        ort_session = onnxruntime.InferenceSession(sim_onnx_model_path, providers=providers)
-        input_names = [inp.name for inp in ort_session.get_inputs()]
+        def preprocess(img):
+            img = img.convert('RGB').resize(meta['input_size'], Image.Resampling.LANCZOS)
+            tensor = np.array(img, dtype=np.float32) / 255.0
+            tensor = (tensor.transpose(2, 0, 1) - meta['mean']) / meta['std']
+            return np.expand_dims(tensor, axis=0)
 
-        inputs = {
-            input_names[0]: tensor1.astype(np.float32),
-            input_names[1]: tensor2.astype(np.float32)
+        tensor1, tensor2 = preprocess(image1), preprocess(image2)
+        input_feed = {
+            session.get_inputs()[0].name: tensor1,
+            session.get_inputs()[1].name: tensor2
         }
 
-        outputs = ort_session.run(None, inputs)
-        similarity = outputs[0][0][0]
-
+        output_logit = session.run(None, input_feed)[0].item()
+        similarity = (1 - 1 / (1 + np.exp(-output_logit))) * 100
         return similarity
 
-    # 单图旋转角度
-    def Single_Rotate(self, img_base64: str, rotate_onnx_modex_path: str = '',use_gpu: bool = False):
 
-        rotate_onnx_modex_path = rotate_onnx_modex_path or os.path.join(os.path.dirname(__file__), 'Models', '[Rotate]Rotate_model.onnx')
+
+    # 图像相似度比较
+    def Compare_Image_Similarity(self,
+                                 image1_base64: str,
+                                 image2_base64: str,
+                                 model_type: str = 'EfficientNetB0',
+                                 sim_onnx_model_path: str = None,
+                                 use_gpu: bool = False):
+
+        if sim_onnx_model_path:
+            model_path = sim_onnx_model_path
+            effective_model_type = next((k for k in SIAMESE_MODEL_MAPPINGS if k.lower() in os.path.basename(model_path).lower()), model_type)
+        else:
+            if model_type not in SIAMESE_MODEL_MAPPINGS:
+                raise ValueError(f"[AntiCAP] ❌ 不支持的模型类型: {model_type}")
+            model_path = os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', SIAMESE_MODEL_MAPPINGS[model_type])
+            effective_model_type = model_type
+
+        image1 = Image.open(io.BytesIO(base64.b64decode(image1_base64)))
+        image2 = Image.open(io.BytesIO(base64.b64decode(image2_base64)))
+
+        return self.get_siamese_similarity(image1, image2, model_path, use_gpu, effective_model_type, sim_onnx_model_path=sim_onnx_model_path)
+
+
+
+    # 单图旋转角度
+    def Single_Rotate(self,
+                      img_base64: str,
+                      rotate_onnx_modex_path: str = '',
+                      use_gpu: bool = False):
+
+        rotate_onnx_modex_path = rotate_onnx_modex_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Rotation-RotNetR.onnx')
 
         providers = ['CUDAExecutionProvider'] if use_gpu and onnxruntime.get_device().upper() == 'GPU' else ['CPUExecutionProvider']
         session = onnxruntime.InferenceSession(rotate_onnx_modex_path, providers=providers)
@@ -630,8 +729,18 @@ class Handler(object):
         degree = int(np.argmax(predict, axis=1).item())
         return degree
 
+
+
     # 双图旋转
-    def Double_Rotate(self,inside_base64: str, outside_base64: str, check_pixel: int = 10, speed_ratio: float = 1,grayscale: bool = False, anticlockwise: bool = False, cut_pixel_value: int = 0, ):
+    def Double_Rotate(self,
+                      inside_base64: str,
+                      outside_base64: str,
+                      check_pixel: int = 10,
+                      speed_ratio: float = 1,
+                      grayscale: bool = False,
+                      anticlockwise: bool = False,
+                      cut_pixel_value: int = 0, ):
+
         image_array_inner = np.asarray(bytearray(base64.b64decode(inside_base64)), dtype="uint8")
         inner_image = cv2.imdecode(image_array_inner, 1)
         if grayscale:
@@ -664,7 +773,7 @@ class Handler(object):
 
         cut_array_inner = inner_image[up_inner:down_inner, left_inner:right_inner]
         if cut_array_inner.size == 0:
-            raise ValueError("[Anti-CAP] cut_array_inner 是空的，请检查输入图片或裁剪逻辑。")
+            raise ValueError("[AntiCAP] cut_array_inner 是空的，请检查输入图片或裁剪逻辑。")
 
         diameter_inner = (min(cut_array_inner.shape[:2]) // 2) * 2
         cut_inner_image = cv2.resize(cut_array_inner, dsize=(diameter_inner, diameter_inner))
@@ -706,7 +815,7 @@ class Handler(object):
 
         cut_array_outer = outer_image[up_outer:down_outer, left_outer:right_outer]
         if cut_array_outer.size == 0:
-            raise ValueError("[Anti-CAP] cut_array_outer 是空的，请检查输入图片或裁剪逻辑。")
+            raise ValueError("[AntiCAP] cut_array_outer 是空的，请检查输入图片或裁剪逻辑。")
 
         diameter_outer = (min(cut_array_outer.shape[:2]) // 2) * 2
         cut_outer_image = cv2.resize(cut_array_outer, dsize=(diameter_outer, diameter_outer))
