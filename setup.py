@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="AntiCAP",
-    version="3.2.2",
+    version="3.2.3",
     author="NewArk81",
     description="AntiCAP",
     long_description=long_description,
