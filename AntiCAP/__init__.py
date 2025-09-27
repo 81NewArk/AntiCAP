@@ -175,16 +175,15 @@ class Handler(object):
              math_model_path: str = '',
              use_gpu: bool = False):
 
-        math_model_path = math_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Detection_Math-YOLO.pt')
+        math_model_path = math_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models',
+                                                          '[AntiCAP]-Detection_Math-YOLO.pt')
 
         device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
         model = YOLO(math_model_path, verbose=False)
         model.to(device)
 
-
         image_bytes = base64.b64decode(img_base64)
         image = Image.open(io.BytesIO(image_bytes))
-
 
         results = model(image)
 
@@ -199,8 +198,9 @@ class Handler(object):
         sorted_elements.sort(key=lambda x: x[0])
         sorted_labels = [label for _, label in sorted_elements]
 
-
         captcha_text = ''.join(sorted_labels)
+
+        print(captcha_text)
 
         if not captcha_text:
             return None
@@ -211,10 +211,10 @@ class Handler(object):
         expr = expr.replace('？', '?')  # 容错中文问号
         expr = expr.replace('=', '')  # 去掉等号
 
-
+        # 去掉所有非数字和运算符的字符（问号会被去掉）
         expr = re.sub(r'[^0-9\+\-\*/]', '', expr)
 
-        if not expr or '?' in captcha_text:  # 如果有问号，直接不给结果
+        if not expr:
             return None
 
         # 安全计算表达式
@@ -224,8 +224,6 @@ class Handler(object):
         except Exception as e:
             print(f"[AntiCAP] 表达式解析出错: {expr}, 错误: {e}")
             return None
-
-
 
     # 图标侦测
     def Detection_Icon(self,
