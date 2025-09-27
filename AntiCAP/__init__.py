@@ -7,6 +7,7 @@ import cv2
 import ast
 import math
 import json
+import time
 import torch
 import base64
 import logging
@@ -42,20 +43,41 @@ def _download_models_if_needed():
     ]
 
     os.makedirs(output_dir, exist_ok=True)
-
     print(f"[AntiCAP] 首次使用，正在检查模型文件...")
+
+    MAX_RETRIES = 3
+
     for fname in filenames:
         filepath = os.path.join(output_dir, fname)
-        if not os.path.exists(filepath):
-            print(f"[AntiCAP] ⚠️ 模型文件 '{fname}' 不存在，正在下载...")
-            encoded_name = urllib.parse.quote(fname)
-            full_url = base_url + encoded_name
+        if os.path.exists(filepath):
+            print(f"[AntiCAP] 模型文件 '{fname}' 已存在，跳过下载。")
+            continue
+
+        print(f"[AntiCAP] ⚠️ 模型文件 '{fname}' 不存在，正在下载...")
+
+        encoded_name = urllib.parse.quote(fname)
+        full_url = base_url + encoded_name
+
+        for attempt in range(1, MAX_RETRIES + 1):
             try:
-                with requests.get(full_url, stream=True, timeout=60) as r:
+                # 支持断点续传
+                resume_header = {}
+                mode = "wb"
+                existing_size = 0
+                if os.path.exists(filepath):
+                    existing_size = os.path.getsize(filepath)
+                    if existing_size > 0:
+                        resume_header = {"Range": f"bytes={existing_size}-"}
+                        mode = "ab"
+
+                with requests.get(full_url, headers=resume_header, stream=True, timeout=300) as r:
                     r.raise_for_status()
                     total_size = int(r.headers.get("Content-Length", 0))
-                    with open(filepath, "wb") as f, tqdm(
+                    total_size += existing_size  # 如果是续传，加上已下载部分
+
+                    with open(filepath, mode) as f, tqdm(
                         total=total_size,
+                        initial=existing_size,
                         unit="B",
                         unit_scale=True,
                         unit_divisor=1024,
@@ -66,14 +88,20 @@ def _download_models_if_needed():
                             if chunk:
                                 f.write(chunk)
                                 bar.update(len(chunk))
+
                 print(f"[AntiCAP] ✅ 模型文件 '{fname}' 下载完成。")
+                break  # 成功下载后跳出重试
             except Exception as e:
-                print(f"[AntiCAP] ❌ 模型文件 '{fname}' 下载失败: {e}")
-                print(f"[AntiCAP] 请手动下载模型文件 '{fname}' 并放置在目录 '{output_dir}' 中，或检查网络连接后重试。")
-                print(f"[AntiCAP] 下载链接: https://github.com/81NewArk/AntiCAP/tree/main/AntiCAP/AntiCAP-Models")
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-                raise IOError(f"无法下载模型文件 '{fname}'，请检查网络连接或稍后重试。")
+                print(f"[AntiCAP] ⚠️ 下载尝试 {attempt} 失败: {e}")
+                if attempt < MAX_RETRIES:
+                    print("[AntiCAP] 正在重试...")
+                    time.sleep(5)
+                else:
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                    print(f"[AntiCAP] ❌ 模型文件 '{fname}' 下载失败，请手动下载并放置在 '{output_dir}'。")
+                    print(f"[AntiCAP] 下载链接: https://github.com/81NewArk/AntiCAP/tree/main/AntiCAP/AntiCAP-Models")
+                    raise IOError(f"无法下载模型文件 '{fname}'，请检查网络或稍后重试。")
 
 SIAMESE_MODEL_MAPPINGS = {
     'VGG16': '[AntiCAP]-Siamese_VggNet16.onnx',
