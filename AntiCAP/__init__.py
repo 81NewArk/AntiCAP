@@ -573,9 +573,7 @@ class Handler(object):
         h, w = target_rgb.shape[:2]
         bottom_right = (max_loc[0] + w, max_loc[1] + h)
 
-        return {"target_x": target_x,
-                "target_y": target_y,
-                "target": [int(max_loc[0]), int(max_loc[1]), int(bottom_right[0]), int(bottom_right[1])]}
+        return {"target": [int(max_loc[0]), int(max_loc[1]), int(bottom_right[0]), int(bottom_right[1])]}
 
 
 
@@ -583,9 +581,12 @@ class Handler(object):
     def Slider_Comparison(self,
                           target_base64: str = None,
                           background_base64: str = None):
+
         def decode_base64_to_image(base64_string):
             image_data = base64.b64decode(base64_string)
             return Image.open(io.BytesIO(image_data)).convert("RGB")
+
+
 
         target = decode_base64_to_image(target_base64)
         background = decode_base64_to_image(background_base64)
