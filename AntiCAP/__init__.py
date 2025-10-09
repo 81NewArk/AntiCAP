@@ -34,10 +34,7 @@ def _download_models_if_needed():
         "[AntiCAP]-Detection_Icon-YOLO.pt",
         "[AntiCAP]-Detection_Math-YOLO.pt",
         "[AntiCAP]-Detection_Text-YOLO.pt",
-        "[AntiCAP]-Rotation-RotNetR.onnx",
-        "[AntiCAP]-Siamese_RestNet18.onnx",
-        "[AntiCAP]-Siamese_VggNet16.onnx",
-        "[AntiCAP]-Siamese_EfficientNetB0.onnx",
+        "[AntiCAP]-Siamese-ResNet18.onnx",
         "[Dddd]-OCR.onnx",
         "[Dddd]-CharSets.txt",
     ]
@@ -50,7 +47,7 @@ def _download_models_if_needed():
     for fname in filenames:
         filepath = os.path.join(output_dir, fname)
         if os.path.exists(filepath):
-            print(f"[AntiCAP] 模型文件 '{fname}' 已存在，跳过下载。")
+            # print(f"[AntiCAP] 模型文件 '{fname}' 已存在，跳过下载。")
             continue
 
         print(f"[AntiCAP] ⚠️ 模型文件 '{fname}' 不存在，正在下载...")
@@ -104,9 +101,7 @@ def _download_models_if_needed():
                     raise IOError(f"无法下载模型文件 '{fname}'，请检查网络或稍后重试。")
 
 SIAMESE_MODEL_MAPPINGS = {
-    'VGG16': '[AntiCAP]-Siamese_VggNet16.onnx',
-    'EfficientNetB0': '[AntiCAP]-Siamese_EfficientNetB0.onnx',
-    'RestNet18': '[AntiCAP]-Siamese_RestNet18.onnx',
+    'Siamese-ResNet18': '[AntiCAP]-Siamese-ResNet18.onnx',
 }
 
 
@@ -290,7 +285,7 @@ class Handler(object):
                         detectionIcon_model_path: str = '',
                         sim_onnx_model_path: str = '',
                         use_gpu: bool = False,
-                        model_type: str = 'EfficientNetB0'):
+                        model_type: str = 'Siamese-ResNet18'):
 
         detectionIcon_model_path = detectionIcon_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Detection_Icon-YOLO.pt')
         
@@ -298,7 +293,7 @@ class Handler(object):
             model_path = sim_onnx_model_path
             effective_model_type = next((k for k in SIAMESE_MODEL_MAPPINGS if k.lower() in os.path.basename(model_path).lower()), model_type)
         else:
-            model_path = os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', SIAMESE_MODEL_MAPPINGS.get(model_type, SIAMESE_MODEL_MAPPINGS['EfficientNetB0']))
+            model_path = os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', SIAMESE_MODEL_MAPPINGS.get(model_type, SIAMESE_MODEL_MAPPINGS['Siamese-ResNet18']))
             effective_model_type = model_type
 
         device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
@@ -391,7 +386,7 @@ class Handler(object):
                         detectionText_model_path: str = '',
                         sim_onnx_model_path: str = '',
                         use_gpu: bool = False,
-                        model_type: str = 'EfficientNetB0'):
+                        model_type: str = 'Siamese-ResNet18'):
 
         detectionText_model_path = detectionText_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Detection_Text-YOLO.pt')
 
@@ -399,7 +394,7 @@ class Handler(object):
             model_path = sim_onnx_model_path
             effective_model_type = next((k for k in SIAMESE_MODEL_MAPPINGS if k.lower() in os.path.basename(model_path).lower()), model_type)
         else:
-            model_path = os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', SIAMESE_MODEL_MAPPINGS.get(model_type, SIAMESE_MODEL_MAPPINGS['EfficientNetB0']))
+            model_path = os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', SIAMESE_MODEL_MAPPINGS.get(model_type, SIAMESE_MODEL_MAPPINGS['Siamese-ResNet18']))
             effective_model_type = model_type
 
         device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
@@ -551,13 +546,13 @@ class Handler(object):
         else:
             target = decode_base64_to_image(target_base64)
             if target is None:
-                return {"target_x": 0, "target_y": 0, "target": [0, 0, 0, 0]}
+                return {"target": [0, 0, 0, 0]}
             target_y = 0
             target_x = 0
 
         background = decode_base64_to_image(background_base64)
         if background is None:
-            return {"target_x": target_x, "target_y": target_y, "target": [0, 0, 0, 0]}
+            return {"target": [0, 0, 0, 0]}
 
         background_gray = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
         target_gray = cv2.cvtColor(target, cv2.COLOR_BGR2GRAY)
@@ -651,9 +646,15 @@ class Handler(object):
                 1. 在 ONNX 模型中添加自定义元数据 `mean` 和 `std`，值为列表形式，例如 [0.485,0.456,0.406] 和 [0.229,0.224,0.225]。
                 2. 保存模型后，项目会自动读取这些元数据进行归一化处理，从而保证相似度计算精度与兼容性。''')
 
-            default_sizes = {'RestNet18': (105, 105), 'VGG16': (224, 224), 'EfficientNetB0': (224, 224)}
+            default_sizes = {'Siamese-ResNet18': (105, 105)}
             input_meta = session.get_inputs()[0]
-            input_size = (input_meta.shape[3], input_meta.shape[2]) if len(input_meta.shape) == 4 else default_sizes.get(model_type, (224, 224))
+
+
+            if len(input_meta.shape) == 4 and isinstance(input_meta.shape[2], int) and isinstance(input_meta.shape[3], int):
+                input_size = (input_meta.shape[3], input_meta.shape[2])
+            else:
+
+                input_size = default_sizes.get(model_type, (224, 224))
 
             meta = {'mean': mean, 'std': std, 'input_size': input_size}
             self.siamese_models[model_path] = (session, meta)
@@ -670,8 +671,10 @@ class Handler(object):
             session.get_inputs()[1].name: tensor2
         }
 
-        output_logit = session.run(None, input_feed)[0].item()
-        similarity = (1 - 1 / (1 + np.exp(-output_logit))) * 100
+        outputs = session.run(None, input_feed)
+        emb1, emb2 = outputs[0], outputs[1]
+        dist = np.linalg.norm(emb1 - emb2)
+        similarity = 1 / (1 + dist)
         return similarity
 
 
@@ -680,7 +683,7 @@ class Handler(object):
     def Compare_Image_Similarity(self,
                                  image1_base64: str,
                                  image2_base64: str,
-                                 model_type: str = 'EfficientNetB0',
+                                 model_type: str = 'Siamese-ResNet18',
                                  sim_onnx_model_path: str = None,
                                  use_gpu: bool = False):
 
