@@ -35,6 +35,7 @@ def _download_models_if_needed():
         "[AntiCAP]-Detection_Math-YOLO.pt",
         "[AntiCAP]-Detection_Text-YOLO.pt",
         "[AntiCAP]-Siamese-ResNet18.onnx",
+        "[AntiCAP]-Rotation-RotNetR.onnx",
         "[Dddd]-OCR.onnx",
         "[Dddd]-CharSets.txt",
     ]
