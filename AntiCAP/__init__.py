@@ -32,7 +32,7 @@ def _download_models_if_needed():
     base_url = "https://newark81.vip/AntiCAP-Models/"
     filenames = [
         "[AntiCAP]-Detection_Icon-YOLO.pt",
-        "[AntiCAP]-Detection_Math-YOLO.pt",
+        "[AntiCAP]-CRNN_Math.onnx",
         "[AntiCAP]-Detection_Text-YOLO.pt",
         "[AntiCAP]-Siamese-ResNet18.onnx",
         "[AntiCAP]-Rotation-RotNetR.onnx",
@@ -100,11 +100,6 @@ def _download_models_if_needed():
                     print(f"[AntiCAP] ❌ 模型文件 '{fname}' 下载失败，请手动下载并放置在 '{output_dir}'。")
                     print(f"[AntiCAP] 下载链接: https://github.com/81NewArk/AntiCAP/tree/main/AntiCAP/AntiCAP-Models")
                     raise IOError(f"无法下载模型文件 '{fname}'，请检查网络或稍后重试。")
-
-SIAMESE_MODEL_MAPPINGS = {
-    'Siamese-ResNet18': '[AntiCAP]-Siamese-ResNet18.onnx',
-}
-
 
 class AntiCAPException(Exception):
     pass
@@ -181,7 +176,6 @@ class Handler(object):
             return ''.join(result)
         else:
             ort_outs = ort_outs[0]
-            # 应用 softmax 进行概率计算
             ort_outs = np.exp(ort_outs) / np.sum(np.exp(ort_outs), axis=2, keepdims=True)
             ort_outs_probability = np.squeeze(ort_outs).tolist()
 
@@ -199,32 +193,48 @@ class Handler(object):
              math_model_path: str = '',
              use_gpu: bool = False):
 
-        math_model_path = math_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models',
-                                                          '[AntiCAP]-Detection_Math-YOLO.pt')
+        math_model_path = math_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models','[AntiCAP]-CRNN_Math.onnx')
 
-        device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
-        model = YOLO(math_model_path, verbose=False)
-        model.to(device)
+        providers = ['CUDAExecutionProvider'] if use_gpu and onnxruntime.get_device().upper() == 'GPU' else ['CPUExecutionProvider']
+        session = onnxruntime.InferenceSession(math_model_path, providers=providers)
+        input_name = session.get_inputs()[0].name
 
+
+        IMG_H = 32
+        IMG_W = 160
         image_bytes = base64.b64decode(img_base64)
-        image = Image.open(io.BytesIO(image_bytes))
+        image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+        image = image.resize((IMG_W, IMG_H), Image.Resampling.LANCZOS)
 
-        results = model(image)
 
-        # 解析检测结果（按 x 坐标排序）
-        sorted_elements = []
-        for box in results[0].boxes:
-            cls_id = int(box.cls[0])
-            label = results[0].names[cls_id].strip()
-            x1 = float(box.xyxy[0][0])
-            sorted_elements.append((x1, label))
+        image_np = np.array(image, dtype=np.float32) / 255.0
+        image_np = (image_np.transpose(2, 0, 1) - 0.5) / 0.5
+        input_data = np.expand_dims(image_np, axis=0)
 
-        sorted_elements.sort(key=lambda x: x[0])
-        sorted_labels = [label for _, label in sorted_elements]
 
-        captcha_text = ''.join(sorted_labels)
+        results = session.run(None, {input_name: input_data})
 
-        print(captcha_text)
+
+        CHARS = "0123456789+-*/÷×=?"
+        preds_tensor = torch.from_numpy(results[0])
+        char_map_inv = {i + 1: c for i, c in enumerate(CHARS)}
+        char_map_inv[0] = ' '  # Blank
+        
+        preds = preds_tensor.permute(1, 0, 2)
+        preds = preds.argmax(2)
+
+        decoded_strings = []
+        for sequence in preds:
+            decoded_chars = []
+            prev_char_idx = -1
+            for char_idx in sequence:
+                char_idx = char_idx.item()
+                if char_idx != 0 and char_idx != prev_char_idx:
+                    decoded_chars.append(char_map_inv[char_idx])
+                prev_char_idx = char_idx
+            decoded_strings.append(''.join(decoded_chars))
+        
+        captcha_text = decoded_strings[0] if decoded_strings else ""
 
         if not captcha_text:
             return None
@@ -233,7 +243,7 @@ class Handler(object):
         expr = captcha_text
         expr = expr.replace('×', '*').replace('÷', '/')
         expr = expr.replace('？', '?')  # 容错中文问号
-        expr = expr.replace('=', '')  # 去掉等号
+        expr = expr.replace('=', '')   # 去掉等号
 
         # 去掉所有非数字和运算符的字符（问号会被去掉）
         expr = re.sub(r'[^0-9\+\-\*/]', '', expr)
@@ -243,7 +253,8 @@ class Handler(object):
 
         # 安全计算表达式
         try:
-            result = eval(expr)
+            # 使用更安全的 eval
+            result = eval(expr, {"__builtins__": None}, {})
             return result
         except Exception as e:
             print(f"[AntiCAP] 表达式解析出错: {expr}, 错误: {e}")
@@ -284,18 +295,11 @@ class Handler(object):
                         order_img_base64: str,
                         target_img_base64: str,
                         detectionIcon_model_path: str = '',
-                        sim_onnx_model_path: str = '',
-                        use_gpu: bool = False,
-                        model_type: str = 'Siamese-ResNet18'):
+                        siamese_model_path: str = '',
+                        use_gpu: bool = False):
 
         detectionIcon_model_path = detectionIcon_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Detection_Icon-YOLO.pt')
-        
-        if sim_onnx_model_path:
-            model_path = sim_onnx_model_path
-            effective_model_type = next((k for k in SIAMESE_MODEL_MAPPINGS if k.lower() in os.path.basename(model_path).lower()), model_type)
-        else:
-            model_path = os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', SIAMESE_MODEL_MAPPINGS.get(model_type, SIAMESE_MODEL_MAPPINGS['Siamese-ResNet18']))
-            effective_model_type = model_type
+        siamese_model_path = siamese_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Siamese-ResNet18.onnx')
 
         device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
         model = YOLO(detectionIcon_model_path)
@@ -334,7 +338,7 @@ class Handler(object):
                 if target_crop.width == 0 or target_crop.height == 0:
                     continue
 
-                similarity_score = self.get_siamese_similarity(order_crop, target_crop, model_path, use_gpu, effective_model_type, sim_onnx_model_path=sim_onnx_model_path)
+                similarity_score = self.get_siamese_similarity(order_crop, target_crop, siamese_model_path, use_gpu)
 
                 if similarity_score > best_score:
                     best_score = similarity_score
@@ -385,18 +389,11 @@ class Handler(object):
                         order_img_base64: str,
                         target_img_base64: str,
                         detectionText_model_path: str = '',
-                        sim_onnx_model_path: str = '',
-                        use_gpu: bool = False,
-                        model_type: str = 'Siamese-ResNet18'):
+                        siamese_model_path: str = '',
+                        use_gpu: bool = False):
 
         detectionText_model_path = detectionText_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Detection_Text-YOLO.pt')
-
-        if sim_onnx_model_path:
-            model_path = sim_onnx_model_path
-            effective_model_type = next((k for k in SIAMESE_MODEL_MAPPINGS if k.lower() in os.path.basename(model_path).lower()), model_type)
-        else:
-            model_path = os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', SIAMESE_MODEL_MAPPINGS.get(model_type, SIAMESE_MODEL_MAPPINGS['Siamese-ResNet18']))
-            effective_model_type = model_type
+        siamese_model_path = siamese_model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Siamese-ResNet18.onnx')
 
         device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
         model = YOLO(detectionText_model_path)
@@ -435,7 +432,7 @@ class Handler(object):
                 if target_crop.width == 0 or target_crop.height == 0:
                     continue
 
-                similarity_score = self.get_siamese_similarity(order_crop, target_crop, model_path, use_gpu, effective_model_type, sim_onnx_model_path=sim_onnx_model_path)
+                similarity_score = self.get_siamese_similarity(order_crop, target_crop, siamese_model_path, use_gpu)
 
                 if similarity_score > best_score:
                     best_score = similarity_score
@@ -617,10 +614,7 @@ class Handler(object):
                                image1: Image.Image,
                                image2: Image.Image,
                                model_path: str,
-                               use_gpu: bool,
-                               model_type: str,
-                               sim_onnx_model_path:
-                               str = None):
+                               use_gpu: bool):
 
         if model_path in self.siamese_models:
             session, meta = self.siamese_models[model_path]
@@ -640,22 +634,13 @@ class Handler(object):
                     std = np.array(json.loads(model_meta.custom_metadata_map['std']), dtype=np.float32).reshape(3, 1, 1)
                 except Exception:
                     print("[AntiCAP] 提示：解析自定义模型的 mean/std 失败，使用默认值。")
-            elif sim_onnx_model_path:
-                print('''[AntiCAP] 提示：为了兼容本项目，您的自定义 ONNX 模型必须包含 `mean` 和 `std` 元数据。
-                
-                ⚠️ 如果您的训练归一化参数与默认值不同，请务必在导出 ONNX 时添加正确的 `mean` 和 `std`，否则图像相似度计算可能不准确。
-                1. 在 ONNX 模型中添加自定义元数据 `mean` 和 `std`，值为列表形式，例如 [0.485,0.456,0.406] 和 [0.229,0.224,0.225]。
-                2. 保存模型后，项目会自动读取这些元数据进行归一化处理，从而保证相似度计算精度与兼容性。''')
 
-            default_sizes = {'Siamese-ResNet18': (105, 105)}
             input_meta = session.get_inputs()[0]
-
-
-            if len(input_meta.shape) == 4 and isinstance(input_meta.shape[2], int) and isinstance(input_meta.shape[3], int):
+            try:
                 input_size = (input_meta.shape[3], input_meta.shape[2])
-            else:
-
-                input_size = default_sizes.get(model_type, (224, 224))
+            except (IndexError, TypeError):
+                print("[AntiCAP] 提示：无法从模型元数据推断输入尺寸，使用默认值 (224, 224)。")
+                input_size = (224, 224)
 
             meta = {'mean': mean, 'std': std, 'input_size': input_size}
             self.siamese_models[model_path] = (session, meta)
@@ -684,23 +669,15 @@ class Handler(object):
     def Compare_Image_Similarity(self,
                                  image1_base64: str,
                                  image2_base64: str,
-                                 model_type: str = 'Siamese-ResNet18',
-                                 sim_onnx_model_path: str = None,
+                                 model_path: str = None,
                                  use_gpu: bool = False):
 
-        if sim_onnx_model_path:
-            model_path = sim_onnx_model_path
-            effective_model_type = next((k for k in SIAMESE_MODEL_MAPPINGS if k.lower() in os.path.basename(model_path).lower()), model_type)
-        else:
-            if model_type not in SIAMESE_MODEL_MAPPINGS:
-                raise ValueError(f"[AntiCAP] ❌ 不支持的模型类型: {model_type}")
-            model_path = os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', SIAMESE_MODEL_MAPPINGS[model_type])
-            effective_model_type = model_type
+        model_path = model_path or os.path.join(os.path.dirname(__file__), 'AntiCAP-Models', '[AntiCAP]-Siamese-ResNet18.onnx')
 
         image1 = Image.open(io.BytesIO(base64.b64decode(image1_base64)))
         image2 = Image.open(io.BytesIO(base64.b64decode(image2_base64)))
 
-        return self.get_siamese_similarity(image1, image2, model_path, use_gpu, effective_model_type, sim_onnx_model_path=sim_onnx_model_path)
+        return self.get_siamese_similarity(image1, image2, model_path, use_gpu)
 
 
 
