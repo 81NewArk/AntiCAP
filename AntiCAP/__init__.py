@@ -41,7 +41,7 @@ def _download_models_if_needed():
     ]
 
     os.makedirs(output_dir, exist_ok=True)
-    print(f"[AntiCAP] 首次使用，正在检查模型文件...")
+
 
     MAX_RETRIES = 3
 
