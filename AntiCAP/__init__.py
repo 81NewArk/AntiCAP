@@ -122,7 +122,8 @@ class Handler(object):
             |  /_/   \_\ |_| |_|  \__| |_|  \____| /_/   \_\ |_|      |
             ----------------------------------------------------------- 
             |         Github: https://github.com/81NewArk/AntiCAP     |
-            |         Author: 81NewArk                                |
+            |         Blog  : https://www.newark81.vip/               |          
+            |         Author: 81NewArk                                |       
             -----------------------------------------------------------''')
 
     # 文字识别
