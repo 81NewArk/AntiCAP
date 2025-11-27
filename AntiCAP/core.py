@@ -37,16 +37,16 @@ class Handler(object):
         return detection.solve_detection_icon(self.manager, img_base64, detectionIcon_model_path, use_gpu)
 
     # 按序侦测图标
-    def ClickIcon_Order(self, order_img_base64: str, target_img_base64: str, detectionIcon_model_path: str = '', siamese_model_path: str = '', use_gpu: bool = False):
-        return click.solve_click_icon_order(self.manager, order_img_base64, target_img_base64, detectionIcon_model_path, siamese_model_path, use_gpu)
+    def ClickIcon_Order(self, order_img_base64: str, target_img_base64: str, detectionIcon_model_path: str = '', sim_onnx_model_path: str = '', use_gpu: bool = False):
+        return click.solve_click_icon_order(self.manager, order_img_base64, target_img_base64, detectionIcon_model_path, sim_onnx_model_path, use_gpu)
 
     # 文字侦测
     def Detection_Text(self, img_base64: str = None, detectionText_model_path: str = '', use_gpu: bool = False):
         return detection.solve_detection_text(self.manager, img_base64, detectionText_model_path, use_gpu)
 
     # 按序侦测文字
-    def ClickText_Order(self, order_img_base64: str, target_img_base64: str, detectionText_model_path: str = '', siamese_model_path: str = '', use_gpu: bool = False):
-        return click.solve_click_text_order(self.manager, order_img_base64, target_img_base64, detectionText_model_path, siamese_model_path, use_gpu)
+    def ClickText_Order(self, order_img_base64: str, target_img_base64: str, detectionText_model_path: str = '', sim_onnx_model_path: str = '', use_gpu: bool = False):
+        return click.solve_click_text_order(self.manager, order_img_base64, target_img_base64, detectionText_model_path, sim_onnx_model_path, use_gpu)
 
     # 缺口滑块
     def Slider_Match(self, target_base64: str = None, background_base64: str = None, simple_target: bool = False, flag: bool = False):
@@ -57,8 +57,8 @@ class Handler(object):
         return slider.solve_slider_comparison(self.manager, target_base64, background_base64)
 
     # 图像相似度比较
-    def Compare_Image_Similarity(self, image1_base64: str, image2_base64: str, model_path: str = None, use_gpu: bool = False):
-        return similarity.solve_compare_image_similarity(self.manager, image1_base64, image2_base64, model_path, use_gpu)
+    def Compare_Image_Similarity(self, image1_base64: str, image2_base64: str, sim_onnx_model_path: str = None, use_gpu: bool = False):
+        return similarity.solve_compare_image_similarity(self.manager, image1_base64, image2_base64, sim_onnx_model_path, use_gpu)
 
     # 单图旋转角度
     def Single_Rotate(self, img_base64: str, rotate_onnx_modex_path: str = '', use_gpu: bool = False):

@@ -1,10 +1,15 @@
 from .similarity import get_siamese_similarity
 
 from ..utils.common import get_model_path, decode_base64_to_image
+import os
 
-def solve_click_icon_order(manager, order_img_base64: str, target_img_base64: str, detectionIcon_model_path: str = '', siamese_model_path: str = '', use_gpu: bool = False):
+def solve_click_icon_order(manager, order_img_base64: str, target_img_base64: str, detectionIcon_model_path: str = '', sim_onnx_model_path: str = '', use_gpu: bool = False):
     detectionIcon_model_path = detectionIcon_model_path or get_model_path('[AntiCAP]-Detection_Icon-YOLO.pt')
-    siamese_model_path = siamese_model_path or get_model_path('[AntiCAP]-Siamese-ResNet18.onnx')
+    
+    if sim_onnx_model_path:
+        siamese_model_path = sim_onnx_model_path
+    else:
+        siamese_model_path = get_model_path('[AntiCAP]-Siamese-ResNet18.onnx')
 
     model = manager.get_yolo_model(detectionIcon_model_path, use_gpu)
 
@@ -41,7 +46,7 @@ def solve_click_icon_order(manager, order_img_base64: str, target_img_base64: st
             if target_crop.width == 0 or target_crop.height == 0:
                 continue
 
-            similarity_score = get_siamese_similarity(manager, order_crop, target_crop, siamese_model_path, use_gpu)
+            similarity_score = get_siamese_similarity(manager, order_crop, target_crop, siamese_model_path, use_gpu, is_custom_model=bool(sim_onnx_model_path))
 
             if similarity_score > best_score:
                 best_score = similarity_score
@@ -55,9 +60,13 @@ def solve_click_icon_order(manager, order_img_base64: str, target_img_base64: st
 
     return best_matching_boxes
 
-def solve_click_text_order(manager, order_img_base64: str, target_img_base64: str, detectionText_model_path: str = '', siamese_model_path: str = '', use_gpu: bool = False):
+def solve_click_text_order(manager, order_img_base64: str, target_img_base64: str, detectionText_model_path: str = '', sim_onnx_model_path: str = '', use_gpu: bool = False):
     detectionText_model_path = detectionText_model_path or get_model_path('[AntiCAP]-Detection_Text-YOLO.pt')
-    siamese_model_path = siamese_model_path or get_model_path('[AntiCAP]-Siamese-ResNet18.onnx')
+    
+    if sim_onnx_model_path:
+        siamese_model_path = sim_onnx_model_path
+    else:
+        siamese_model_path = get_model_path('[AntiCAP]-Siamese-ResNet18.onnx')
 
     model = manager.get_yolo_model(detectionText_model_path, use_gpu)
 
@@ -94,7 +103,7 @@ def solve_click_text_order(manager, order_img_base64: str, target_img_base64: st
             if target_crop.width == 0 or target_crop.height == 0:
                 continue
 
-            similarity_score = get_siamese_similarity(manager, order_crop, target_crop, siamese_model_path, use_gpu)
+            similarity_score = get_siamese_similarity(manager, order_crop, target_crop, siamese_model_path, use_gpu, is_custom_model=bool(sim_onnx_model_path))
 
             if similarity_score > best_score:
                 best_score = similarity_score
