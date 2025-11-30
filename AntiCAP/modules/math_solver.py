@@ -1,12 +1,7 @@
-import os
-import io
-import base64
-import re
 import numpy as np
-import torch
 from PIL import Image
-
-from ..utils.common import get_model_path, decode_base64_to_image
+import re
+from ..utils.common import get_model_path, decode_base64_to_image, resize_with_padding, decode
 
 def solve_math(manager, img_base64: str, math_model_path: str = '', use_gpu: bool = False):
     math_model_path = math_model_path or get_model_path('[AntiCAP]-CRNN_Math.onnx')
@@ -14,43 +9,41 @@ def solve_math(manager, img_base64: str, math_model_path: str = '', use_gpu: boo
     session = manager.get_onnx_session(math_model_path, use_gpu)
     input_name = session.get_inputs()[0].name
 
-    IMG_H = 32
-    IMG_W = 160
-    image = decode_base64_to_image(img_base64).convert('RGB')
-    image = image.resize((IMG_W, IMG_H), Image.Resampling.LANCZOS)
-
-    image_np = np.array(image, dtype=np.float32) / 255.0
-    image_np = (image_np.transpose(2, 0, 1) - 0.5) / 0.5
-    input_data = np.expand_dims(image_np, axis=0)
-
-    results = session.run(None, {input_name: input_data})
-
+    # Configuration (Must match training/export)
+    IMG_H = 70
+    IMG_W = 200
     CHARS = "0123456789+-*/÷×=?"
-    preds_tensor = torch.from_numpy(results[0])
+    
+    image = decode_base64_to_image(img_base64).convert('RGB')
+    
+    # Preprocessing
+    image = resize_with_padding(image, (IMG_W, IMG_H))
+    
+    img_np = np.array(image).astype(np.float32) / 255.0
+    img_np = np.transpose(img_np, (2, 0, 1)) # [C, H, W]
+    
+    # Normalize ((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    img_np = (img_np - 0.5) / 0.5
+    
+    # Add batch dimension
+    img_np = np.expand_dims(img_np, axis=0) # [1, C, H, W]
+
+    try:
+        ort_outs = session.run(None, {input_name: img_np})
+        preds = ort_outs[0] # Output 0
+    except Exception as e:
+        print(f"[AntiCAP] Inference error: {e}")
+        return None
+
+    # Decode
     char_map_inv = {i + 1: c for i, c in enumerate(CHARS)}
-    char_map_inv[0] = ' '  # Blank
+    result_str = decode(preds, char_map_inv)[0]
     
-    preds = preds_tensor.permute(1, 0, 2)
-    preds = preds.argmax(2)
-
-    decoded_strings = []
-    for sequence in preds:
-        decoded_chars = []
-        prev_char_idx = -1
-        for char_idx in sequence:
-            char_idx = char_idx.item()
-            if char_idx != 0 and char_idx != prev_char_idx:
-                decoded_chars.append(char_map_inv[char_idx])
-            prev_char_idx = char_idx
-        decoded_strings.append(''.join(decoded_chars))
-    
-    captcha_text = decoded_strings[0] if decoded_strings else ""
-
-    if not captcha_text:
+    if not result_str:
         return None
 
     # Standardize symbols
-    expr = captcha_text
+    expr = result_str
     expr = expr.replace('×', '*').replace('÷', '/')
     expr = expr.replace('？', '?')  # Tolerance for Chinese question mark
     expr = expr.replace('=', '')   # Remove equals sign

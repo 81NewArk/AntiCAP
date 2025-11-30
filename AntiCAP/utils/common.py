@@ -29,3 +29,42 @@ def decode_base64_to_cv2(base64_string: str) -> np.ndarray:
     except Exception as e:
         print(f"Error decoding base64: {e}")
         return None
+
+def resize_with_padding(image, target_size, fill_color=(255, 255, 255)):
+    target_w, target_h = target_size
+    
+    # Calculate aspect ratios
+    ratio_w = target_w / image.width
+    ratio_h = target_h / image.height
+
+    ratio = min(ratio_w, ratio_h)
+    
+    new_w = int(image.width * ratio)
+    new_h = int(image.height * ratio)
+    
+    # Resize the image
+    resized_image = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    
+    # Create a new image with the target size and fill color
+    new_image = Image.new("RGB", target_size, fill_color)
+    new_image.paste(resized_image, (0, 0))
+    
+    return new_image
+
+def decode(preds, char_map_inv):
+    if preds.shape[1] == 1: # Batch size is 1 at dim 1 implies [T, B, C]
+         preds = np.transpose(preds, (1, 0, 2)) # [B, T, C]
+    
+    # Argmax
+    preds_idx = np.argmax(preds, axis=2) # [B, T]
+    
+    decoded_strings = []
+    for sequence in preds_idx:
+        decoded = []
+        prev_char = -1
+        for char_idx in sequence:
+            if char_idx != 0 and char_idx != prev_char:
+                decoded.append(char_map_inv[char_idx])
+            prev_char = char_idx
+        decoded_strings.append(''.join(decoded))
+    return decoded_strings
