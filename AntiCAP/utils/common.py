@@ -8,7 +8,6 @@ from PIL import Image
 def get_model_path(filename: str) -> str:
     """Get absolute path to a model file."""
     current_dir = os.path.dirname(__file__)
-    # Go up one level to AntiCAP root
     package_root = os.path.dirname(current_dir)
     return os.path.join(package_root, 'AntiCAP-Models', filename)
 

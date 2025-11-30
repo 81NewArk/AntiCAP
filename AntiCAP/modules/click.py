@@ -1,7 +1,6 @@
 from .similarity import get_siamese_similarity
-
 from ..utils.common import get_model_path, decode_base64_to_image
-import os
+
 
 def solve_click_icon_order(manager, order_img_base64: str, target_img_base64: str, detectionIcon_model_path: str = '', sim_onnx_model_path: str = '', use_gpu: bool = False):
     detectionIcon_model_path = detectionIcon_model_path or get_model_path('[AntiCAP]-Detection_Icon-YOLO.pt')
