@@ -14,14 +14,23 @@ def get_model_path(filename: str) -> str:
 def decode_base64_to_image(base64_string: str) -> Image.Image:
     """Decode base64 string to PIL Image."""
     try:
+        if ',' in base64_string:
+            base64_string = base64_string.split(',', 1)[1]
+            
         image_data = base64.b64decode(base64_string)
-        return Image.open(io.BytesIO(image_data))
+        image = Image.open(io.BytesIO(image_data))
+        image.load()
+        return image
     except Exception as e:
+        # Raise ValueError with more context for easier debugging
         raise ValueError(f"Failed to decode base64 image: {e}")
 
 def decode_base64_to_cv2(base64_string: str) -> np.ndarray:
     """Decode base64 string to OpenCV image (numpy array)."""
     try:
+        if ',' in base64_string:
+            base64_string = base64_string.split(',', 1)[1]
+            
         image_data = base64.b64decode(base64_string)
         img_array = np.frombuffer(image_data, np.uint8)
         return cv2.imdecode(img_array, cv2.IMREAD_UNCHANGED)

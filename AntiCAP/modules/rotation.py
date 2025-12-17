@@ -1,10 +1,10 @@
-import base64
+
 import math
 import numpy as np
 import cv2
 from PIL import Image
 
-from ..utils.common import get_model_path, decode_base64_to_image
+from ..utils.common import get_model_path, decode_base64_to_image, decode_base64_to_cv2
 
 def solve_single_rotate(manager, img_base64: str, rotate_onnx_modex_path: str = '', use_gpu: bool = False):
     rotate_onnx_modex_path = rotate_onnx_modex_path or get_model_path('[AntiCAP]-Rotation-RotNetR.onnx')
@@ -49,13 +49,31 @@ def solve_single_rotate(manager, img_base64: str, rotate_onnx_modex_path: str = 
     return degree
 
 def solve_double_rotate(manager, inside_base64: str, outside_base64: str, check_pixel: int = 10, speed_ratio: float = 1, grayscale: bool = False, anticlockwise: bool = False, cut_pixel_value: int = 0):
-    image_array_inner = np.asarray(bytearray(base64.b64decode(inside_base64)), dtype="uint8")
-    inner_image = cv2.imdecode(image_array_inner, 1)
+    image_array_inner = decode_base64_to_cv2(inside_base64)
+    if image_array_inner is None:
+        raise ValueError("[AntiCAP] Failed to decode inside_base64 image")
+    
+    if len(image_array_inner.shape) == 2:
+        inner_image = cv2.cvtColor(image_array_inner, cv2.COLOR_GRAY2BGR)
+    elif image_array_inner.shape[2] == 4:
+        inner_image = cv2.cvtColor(image_array_inner, cv2.COLOR_BGRA2BGR)
+    else:
+        inner_image = image_array_inner
+
     if grayscale:
         inner_image = cv2.cvtColor(inner_image, cv2.COLOR_BGR2GRAY)
 
-    image_array_outer = np.asarray(bytearray(base64.b64decode(outside_base64)), dtype="uint8")
-    outer_image = cv2.imdecode(image_array_outer, 1)
+    image_array_outer = decode_base64_to_cv2(outside_base64)
+    if image_array_outer is None:
+        raise ValueError("[AntiCAP] Failed to decode outside_base64 image")
+
+    if len(image_array_outer.shape) == 2:
+        outer_image = cv2.cvtColor(image_array_outer, cv2.COLOR_GRAY2BGR)
+    elif image_array_outer.shape[2] == 4:
+        outer_image = cv2.cvtColor(image_array_outer, cv2.COLOR_BGRA2BGR)
+    else:
+        outer_image = image_array_outer
+
     if grayscale:
         outer_image = cv2.cvtColor(outer_image, cv2.COLOR_BGR2GRAY)
 
