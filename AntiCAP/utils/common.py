@@ -1,4 +1,5 @@
 import os
+import sys
 import io
 import base64
 import cv2
@@ -7,9 +8,13 @@ from PIL import Image
 
 def get_model_path(filename: str) -> str:
     """Get absolute path to a model file."""
-    current_dir = os.path.dirname(__file__)
-    package_root = os.path.dirname(current_dir)
-    return os.path.join(package_root, 'AntiCAP-Models', filename)
+    if getattr(sys, "frozen", False):
+        # If the application is frozen (e.g., packaged with PyInstaller), use the executable directory directly
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        # In development, use the package root (one level above this file's directory)
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+    return os.path.join(base_dir, 'AntiCAP-Models', filename)
 
 def decode_base64_to_image(base64_string: str) -> Image.Image:
     """Decode base64 string to PIL Image."""
