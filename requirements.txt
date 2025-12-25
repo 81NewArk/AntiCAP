@@ -4,5 +4,6 @@ Pillow~=10.4.0
 numpy<2.0.0
 ultralytics~=8.3.96
 torch~=2.7.0
+scipy~=1.13.1
 requests~=2.32.3
 setuptools~=70.0.0
