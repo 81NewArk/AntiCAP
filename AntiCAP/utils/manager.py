@@ -21,13 +21,14 @@ class ModelManager:
 
     def _download_models_if_needed(self):
         if getattr(sys, "frozen", False):
-            # If the application is frozen (e.g., packaged with PyInstaller), use executable path
-            current_dir = os.path.dirname(sys.executable)
+            # If the application is frozen (e.g., packaged with PyInstaller), place models next to the executable
+            base_dir = os.path.dirname(sys.executable)
+            output_dir = os.path.join(base_dir, "AntiCAP-Models")
         else:
+            # When running from source, use the AntiCAP package root as the base
             current_dir = os.path.dirname(__file__)
-        # Go up one level to AntiCAP root
-        package_root = os.path.dirname(current_dir)
-        output_dir = os.path.join(package_root, "AntiCAP-Models")
+            package_root = os.path.dirname(current_dir)
+            output_dir = os.path.join(package_root, "AntiCAP-Models")
 
         base_url = "https://newark81.vip/AntiCAP-Models/"
         filenames = [
