@@ -1,4 +1,5 @@
 import os
+import sys
 import io
 import base64
 import cv2
@@ -7,7 +8,11 @@ from PIL import Image
 
 def get_model_path(filename: str) -> str:
     """Get absolute path to a model file."""
-    current_dir = os.path.dirname(__file__)
+    if getattr(sys, "frozen", False):
+        # If the application is frozen (e.g., packaged with PyInstaller), use executable path
+        current_dir = os.path.dirname(sys.executable)
+    else:
+        current_dir = os.path.dirname(__file__)
     package_root = os.path.dirname(current_dir)
     return os.path.join(package_root, 'AntiCAP-Models', filename)
 

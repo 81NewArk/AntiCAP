@@ -1,5 +1,6 @@
 # coding=utf-8
 import os
+import sys
 import time
 import urllib.parse
 import requests
@@ -19,7 +20,11 @@ class ModelManager:
         onnxruntime.set_default_logger_severity(3)
 
     def _download_models_if_needed(self):
-        current_dir = os.path.dirname(__file__)
+        if getattr(sys, "frozen", False):
+            # If the application is frozen (e.g., packaged with PyInstaller), use executable path
+            current_dir = os.path.dirname(sys.executable)
+        else:
+            current_dir = os.path.dirname(__file__)
         # Go up one level to AntiCAP root
         package_root = os.path.dirname(current_dir)
         output_dir = os.path.join(package_root, "AntiCAP-Models")
