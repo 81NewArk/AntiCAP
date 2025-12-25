@@ -31,6 +31,7 @@ setup(
         'ultralytics',
         'requests',
         'tqdm',
+        'scipy'
     ],
     python_requires='<=3.13',
     include_package_data=True,
