@@ -542,11 +542,11 @@ result = Atc.Single_Rotate(image_base64="",
 
 <div align="center">
 
-### 知识星球逐步更新
-### https://t.zsxq.com/Mwjpr
 
-### 星球收入用于项目维护及更新。 
-### 为避免星球收20%手续费 可以私我VX拉进去。
+### https://www.newark81.vip/archives.html
+
+### 收入用于项目维护及更新。 
+
 
 
 </div>
